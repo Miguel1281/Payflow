@@ -12,10 +12,14 @@ def generar_comprobante(concepto):
 
 def procesar_pago(cuenta, concepto, monto_fijo):
     conceptos_validos = ["Renta", "Internet", "Luz"]
-    comision_fija = 15.0
+    # Comisión base para todos los servicios
+    comision_fija = 15.0 
     
     if concepto not in conceptos_validos:
         return {"estado": "Rechazado", "folio": None}
+        
+    if concepto == "Internet":
+        comision_fija = 0.0
         
     monto_total_requerido = monto_fijo + comision_fija
     
