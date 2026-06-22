@@ -1,5 +1,7 @@
 import pytest
 from guardian import PayFlowGuardian
+from unittest.mock import patch
+
 
 def test_estado_inicial_saludable():
     guardian = PayFlowGuardian(pmt=1000.0)
@@ -132,3 +134,109 @@ def test_corte_de_caja_incluye_reporte_variabilidad():
     assert reporte["reporte_variabilidad"]["proyectado"] == 1000.0
     assert reporte["reporte_variabilidad"]["ejecutado"] == 1100.0
     assert reporte["reporte_variabilidad"]["diferencia"] == -100.0
+
+def test_init_pmt_invalido():
+    with pytest.raises(ValueError, match="El Presupuesto Mensual Total \\(PMT\\) debe ser mayor a 0"):
+        PayFlowGuardian(pmt=0.0)
+        
+    with pytest.raises(ValueError, match="El Presupuesto Mensual Total \\(PMT\\) debe ser mayor a 0"):
+        PayFlowGuardian(pmt=-100.0)
+
+def test_establecer_proyeccion_negativa():
+    guardian = PayFlowGuardian(1000.0)
+    with pytest.raises(ValueError, match="La proyección de variables no puede ser un monto negativo"):
+        guardian.establecer_proyeccion_variables(-100.0)
+
+def test_registrar_gasto_negativo():
+    guardian = PayFlowGuardian(1000.0)
+    with pytest.raises(ValueError, match="El gasto no puede ser negativo"):
+        guardian.registrar_gasto(-50.0)
+
+def test_pagar_servicio_monto_negativo():
+    guardian = PayFlowGuardian(1000.0)
+    with pytest.raises(ValueError, match="El monto a pagar por un servicio no puede ser negativo"):
+        guardian.pagar_servicio("Agua", -20.0)
+
+def test_configurar_ahorro_negativo():
+    guardian = PayFlowGuardian(1000.0)
+    with pytest.raises(ValueError, match="La meta de ahorro no puede ser negativa"):
+        guardian.configurar_ahorro(-100.0)
+
+def test_registrar_suscripcion_futura_negativa():
+    guardian = PayFlowGuardian(1000.0)
+    with pytest.raises(ValueError, match="El costo de la suscripción futura no puede ser negativo"):
+        guardian.registrar_suscripcion_futura(-100.0, "Spotify")
+
+def test_ejecutar_cobro_suscripcion_negativo():
+    guardian = PayFlowGuardian(1000.0)
+    with pytest.raises(ValueError, match="El monto exacto a cobrar no puede ser negativo"):
+        guardian.ejecutar_cobro_suscripcion(-100.0, False, True, False)
+
+def test_pagar_servicio_exitoso():
+    guardian = PayFlowGuardian(1000.0)
+    resultado = guardian.pagar_servicio("Luz", 100.0)
+    
+    assert resultado["estado"] == "Éxito"
+    assert guardian.saldo_actual == 885.0
+    assert guardian.gastos_variables_mes == 115.0
+
+def test_pagar_servicio_fondos_insuficientes():
+    guardian = PayFlowGuardian(100.0)
+    with pytest.raises(ValueError, match="Fondos insuficientes para cubrir el servicio 'Luz' y su comisión"):
+        guardian.pagar_servicio("Luz", 100.0)  
+
+def test_pagar_servicio_rechazado_pasarela():
+    guardian = PayFlowGuardian(1000.0)
+    with patch('guardian.procesador_servicios', return_value={"estado": "Rechazado", "folio": None}):
+        with pytest.raises(ValueError, match="Servicio 'Agua' rechazado en la pasarela"):
+            guardian.pagar_servicio("Agua", 100.0)
+
+def test_registrar_suscripcion_sin_nombre_genera_default():
+    guardian = PayFlowGuardian(1000.0)
+    guardian.registrar_suscripcion_futura(100.0) 
+    assert guardian.suscripciones[0]["nombre"] == "Suscripción #1"
+
+def test_ejecutar_cobro_busqueda_por_nombre():
+    guardian = PayFlowGuardian(1000.0)
+    guardian.registrar_suscripcion_futura(100.0, "Netflix")
+    guardian.registrar_suscripcion_futura(100.0, "Spotify")
+    
+    resultado = guardian.ejecutar_cobro_suscripcion(100.0, False, True, False, nombre="  sPoTiFy  ")
+    
+    assert resultado == "Éxito"
+    assert guardian.saldo_actual == 900.0
+    assert guardian.suscripciones[1]["estado"] == "Pagada" 
+    assert guardian.suscripciones[0]["estado"] == "Pendiente" 
+
+def test_ejecutar_cobro_nombre_no_encontrado():
+    guardian = PayFlowGuardian(1000.0)
+    guardian.registrar_suscripcion_futura(100.0, "Netflix")
+    
+    with pytest.raises(ValueError, match="No hay suscripciones pendientes con ese monto o nombre especificado"):
+        guardian.ejecutar_cobro_suscripcion(100.0, False, True, False, nombre="Disney")
+
+def test_registrar_ocio_confirma_riesgo():
+    guardian = PayFlowGuardian(1000.0)
+    guardian.registrar_suscripcion_futura(300.0)
+    
+    guardian.registrar_gasto_ocio(monto=800.0, confirmar=True)
+    
+    assert guardian.saldo_actual == 200.0
+    assert len(guardian.alertas) == 1
+    assert "ADVERTENCIA:" in guardian.alertas[0]
+    
+    guardian.registrar_suscripcion_futura(100.0)
+    guardian.registrar_gasto_ocio(monto=50.0, confirmar=True)
+    assert len(guardian.alertas) == 1 
+
+def test_promedio_historico_vacio():
+    guardian = PayFlowGuardian(1000.0)
+    assert guardian.promedio_historico_ocio == 0.0
+
+def test_alerta_deficit_persiste_tras_gasto():
+    guardian = PayFlowGuardian(1000.0)
+    guardian.configurar_ahorro(1500.0)
+    assert guardian.estado == "Alerta de Déficit"
+    
+    guardian.registrar_gasto(50.0) 
+    assert guardian.estado == "Alerta de Déficit" # La alerta sobrevive
