@@ -55,7 +55,6 @@ def accion(tipo):
             concepto = request.form.get('concepto')
             monto = float(request.form.get('monto'))
             
-            # Llamamos a nuestro nuevo método (ahora admite cualquier texto)
             resultado = guardian_app.pagar_servicio(concepto, monto)
             
             flash(f"Pago de '{concepto}' procesado. Estado: {resultado['estado']} | Folio: {resultado['folio']}", "success")
@@ -68,7 +67,6 @@ def accion(tipo):
                 guardian_app.registrar_gasto_ocio(monto, promedio, confirmar)
                 flash("Gasto de ocio aprobado y registrado.", "success")
             except PermissionError as e:
-                # Se captura la alerta estructural y se solicita interactividad
                 return render_template('index.html', 
                                        guardian=guardian_app, 
                                        solicitar_confirmacion_ocio=True,
