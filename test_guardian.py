@@ -64,6 +64,65 @@ def test_registrar_ocio_advierte_riesgo_suscripciones():
 
     assert "ADVERTENCIA: El gasto compromete el pago de suscripciones futuras" in guardian.alertas
 
+def test_cobro_suscripcion_excede_pendientes_lanza_error():
+    guardian = PayFlowGuardian(pmt=1000.0)
+    guardian.registrar_suscripcion_futura(500.0)
+
+    with pytest.raises(
+        ValueError,
+        match="No hay suscripciones pendientes por ese monto"
+    ):
+        guardian.ejecutar_cobro_suscripcion(600.0, False, True, False)
+
+def test_cobro_suscripcion_exitoso():
+    guardian = PayFlowGuardian(pmt=1000.0)
+    guardian.registrar_suscripcion_futura(500.0)
+
+    resultado = guardian.ejecutar_cobro_suscripcion(
+        500.0,
+        False,
+        True,
+        False
+    )
+
+    assert resultado == "Éxito"
+    assert guardian.saldo_actual == 500.0
+    assert guardian.suscripciones_pendientes == 0.0
+
+def test_cobro_suscripcion_con_advertencia_vip():
+    guardian = PayFlowGuardian(pmt=1000.0)
+    guardian.registrar_suscripcion_futura(500.0)
+
+    resultado = guardian.ejecutar_cobro_suscripcion(
+        500.0,
+        True,
+        True,
+        True
+    )
+
+    assert resultado == "Advertencia"
+    assert guardian.saldo_actual == 500.0
+    assert guardian.suscripciones_pendientes == 0.0
+    assert len(guardian.alertas) == 1
+    assert "Tarjeta Vencida" in guardian.alertas[0]
+
+def test_cobro_suscripcion_fallido():
+    guardian = PayFlowGuardian(pmt=1000.0)
+    guardian.registrar_suscripcion_futura(500.0)
+
+    resultado = guardian.ejecutar_cobro_suscripcion(
+        500.0,
+        False,
+        False,
+        False
+    )
+
+    assert resultado == "Fallido"
+    assert guardian.saldo_actual == 1000.0
+    assert guardian.suscripciones_pendientes == 500.0
+    assert len(guardian.alertas) == 1
+    assert "Fallo al cobrar" in guardian.alertas[0]
+
 def test_corte_de_caja_genera_reporte_y_reinicia():
     guardian = PayFlowGuardian(pmt=1000.0)
     guardian.registrar_gasto(200.0)
@@ -76,3 +135,17 @@ def test_corte_de_caja_genera_reporte_y_reinicia():
     assert len(reporte["alertas_mes"]) == 1
 
     assert len(guardian.alertas) == 0
+
+def test_corte_de_caja_incluye_reporte_variabilidad():
+    guardian = PayFlowGuardian(pmt=5000.0)
+
+    guardian.establecer_proyeccion_variables(1000.0)
+
+    guardian.registrar_gasto(400.0)
+    guardian.registrar_gasto(700.0)
+
+    reporte = guardian.ejecutar_corte_de_caja()
+
+    assert reporte["reporte_variabilidad"]["proyectado"] == 1000.0
+    assert reporte["reporte_variabilidad"]["ejecutado"] == 1100.0
+    assert reporte["reporte_variabilidad"]["diferencia"] == -100.0

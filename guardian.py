@@ -7,9 +7,15 @@ class PayFlowGuardian:
         self.estado = "Saludable"
         self.alertas = []
         self.suscripciones_pendientes = 0.0
+        self.proyeccion_variables = 0.0
+        self.gastos_variables_mes = 0.0
+
+    def establecer_proyeccion_variables(self, monto: float):
+        self.proyeccion_variables = monto
 
     def registrar_gasto(self, monto: float):
         self.saldo_actual -= monto
+        self.gastos_variables_mes += monto
         self._actualizar_estado()
 
     def configurar_ahorro(self, meta_ahorro: float):
@@ -35,11 +41,19 @@ class PayFlowGuardian:
         self._actualizar_estado()
 
         if self.saldo_actual < self.suscripciones_pendientes:
-            self.alertas.append("ADVERTENCIA: El gasto compromete el pago de suscripciones futuras")
+            self.alertas.append(
+                "ADVERTENCIA: El gasto compromete el pago de suscripciones futuras"
+            )
 
-    def ejecutar_cobro_suscripcion(self, costo: float, es_vip: bool, cuenta_activa: bool, tarjeta_vencida: bool):
+    def ejecutar_cobro_suscripcion(
+        self,
+        costo: float,
+        es_vip: bool,
+        cuenta_activa: bool,
+        tarjeta_vencida: bool
+    ):
         if costo > self.suscripciones_pendientes:
-            raise ValueError("No hay suscripciones pendientes por ese monto.")
+            raise ValueError("No hay suscripciones pendientes por ese monto")
 
         resultado = procesar_pago(
             self.saldo_actual,
@@ -66,19 +80,29 @@ class PayFlowGuardian:
 
         else:
             self.alertas.append(
-                f"Fallo al cobrar suscripción de ${costo} (Revisar fondos o estado de cuenta)"
+                f"Fallo al cobrar suscripción de ${costo} "
+                "(Revisar fondos o estado de cuenta)"
             )
             return "Fallido"
 
     def ejecutar_corte_de_caja(self):
+        diferencia = self.proyeccion_variables - self.gastos_variables_mes
+
         reporte = {
             "saldo_final": self.saldo_actual,
             "estado_final": self.estado,
-            "alertas_mes": list(self.alertas)
+            "alertas_mes": list(self.alertas),
+            "reporte_variabilidad": {
+                "proyectado": self.proyeccion_variables,
+                "ejecutado": self.gastos_variables_mes,
+                "diferencia": diferencia
+            }
         }
 
         self.alertas.clear()
         self.suscripciones_pendientes = 0.0
+        self.proyeccion_variables = 0.0
+        self.gastos_variables_mes = 0.0
 
         return reporte
 
