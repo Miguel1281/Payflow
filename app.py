@@ -5,7 +5,7 @@ app = Flask(__name__)
 # Clave secreta necesaria para mostrar mensajes temporales (alertas/errores)
 app.secret_key = 'payflow_secreto_super_seguro'
 
-# Instancia global para simular la sesión (En un entorno real usaríamos base de datos)
+# Instancia global para simular la sesión
 guardian_app = None
 
 @app.route('/')
@@ -40,6 +40,11 @@ def accion(tipo):
             guardian_app.configurar_ahorro(monto)
             flash("Meta de ahorro configurada y procesada.", "success")
             
+        elif tipo == 'proyeccion_variables':  # ¡NUEVA FUNCIONALIDAD!
+            monto = float(request.form.get('monto'))
+            guardian_app.establecer_proyeccion_variables(monto)
+            flash("Proyección de gastos variables establecida exitosamente.", "success")
+            
         elif tipo == 'suscripcion_futura':
             monto = float(request.form.get('monto'))
             guardian_app.registrar_suscripcion_futura(monto)
@@ -48,7 +53,7 @@ def accion(tipo):
         elif tipo == 'gasto_regular':
             monto = float(request.form.get('monto'))
             guardian_app.registrar_gasto(monto)
-            flash("Gasto regular deducido del saldo.", "success")
+            flash("Gasto regular deducido del saldo y acumulado en gastos variables.", "success")
             
         elif tipo == 'gasto_ocio':
             monto = float(request.form.get('monto'))
@@ -58,7 +63,6 @@ def accion(tipo):
             
         elif tipo == 'cobro_suscripcion':
             costo = float(request.form.get('costo'))
-            # Capturamos los checkboxes (si están marcados llegan como 'on')
             es_vip = request.form.get('es_vip') == 'on'
             cuenta_activa = request.form.get('cuenta_activa') == 'on'
             tarjeta_vencida = request.form.get('tarjeta_vencida') == 'on'
@@ -68,12 +72,14 @@ def accion(tipo):
             
         elif tipo == 'corte_caja':
             reporte = guardian_app.ejecutar_corte_de_caja()
+            var = reporte['reporte_variabilidad']
+            # ¡Desglose del nuevo reporte generado por tu lógica de negocio!
             mensaje = (f"Corte de Caja realizado. Saldo final: ${reporte['saldo_final']:.2f} | "
-                       f"Estado final: {reporte['estado_final']} | "
-                       f"Alertas en el mes: {len(reporte['alertas_mes'])}")
+                       f"Estado: {reporte['estado_final']} | "
+                       f"Variabilidad ➔ Proyectado: ${var['proyectado']:.2f}, Ejecutado: ${var['ejecutado']:.2f}, Diferencia: ${var['diferencia']:.2f}")
             flash(mensaje, "success")
             
-    # Gracias al TDD, sabemos que guardian lanza ValueError al romper reglas de negocio
+    # Manejo de Reglas de Negocio lanzadas desde PayFlowGuardian
     except ValueError as e:
         flash(f"Regla de Negocio: {str(e)}", "error")
     except Exception as e:
