@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PayFlow - Guardián de Suscripciones</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --secondary: #34495e;
+            --accent: #3498db;
+            --success: #2ecc71;
+            --warning: #f1c40f;
+            --danger: #e74c3c;
+            --bg: #f8f9fa;
+            --surface: #ffffff;
+            --text: #333333;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        
+        body { background-color: var(--bg); color: var(--text); }
+        
+        .navbar { background-color: var(--primary); color: white; padding: 1.2rem 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .navbar h1 { font-size: 1.5rem; letter-spacing: 1px; }
+
+        .container { display: grid; grid-template-columns: 350px 1fr; gap: 2rem; padding: 2rem; max-width: 1300px; margin: auto; }
+        @media (max-width: 800px) { .container { grid-template-columns: 1fr; } }
+
+        .card { background: var(--surface); padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 1.5rem; border: 1px solid #e1e4e8; }
+        .card-header { font-size: 1.1rem; font-weight: bold; margin-bottom: 1rem; color: var(--primary); border-bottom: 2px solid var(--bg); padding-bottom: 0.5rem; }
+
+        /* Estilos del Dashboard */
+        .stat-group { margin-bottom: 1rem; }
+        .stat-label { font-size: 0.9rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-value { font-size: 1.8rem; font-weight: bold; color: var(--primary); }
+        
+        .badge { padding: 5px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; color: white; }
+        .bg-Saludable { background-color: var(--success); }
+        .bg-En\ Riesgo { background-color: var(--warning); color: #333; }
+        .bg-Crítico, .bg-Alerta\ de\ Déficit { background-color: var(--danger); }
+
+        .alert-box { background: #fff3cd; color: #856404; padding: 0.8rem; border-left: 4px solid var(--warning); margin-bottom: 0.5rem; border-radius: 4px; font-size: 0.9rem; }
+
+        /* Formularios */
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.4rem; font-size: 0.9rem; font-weight: 500; }
+        input[type="number"] { width: 100%; padding: 0.6rem; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem; }
+        
+        .checkbox-group { display: flex; align-items: center; gap: 8px; margin-bottom: 0.8rem; }
+        .checkbox-group input { width: 18px; height: 18px; }
+
+        button { background-color: var(--accent); color: white; border: none; padding: 0.6rem 1.2rem; font-size: 1rem; border-radius: 6px; cursor: pointer; width: 100%; transition: background 0.3s; }
+        button:hover { background-color: #2980b9; }
+        button.btn-danger { background-color: var(--danger); }
+        button.btn-danger:hover { background-color: #c0392b; }
+
+        /* Mensajes Flash (Notificaciones) */
+        .flashes { list-style: none; margin-bottom: 1rem; }
+        .flash { padding: 1rem; border-radius: 6px; margin-bottom: 0.5rem; font-weight: 500; }
+        .flash.success { background-color: #d4edda; color: #155724; border-left: 4px solid var(--success); }
+        .flash.error { background-color: #f8d7da; color: #721c24; border-left: 4px solid var(--danger); }
+        .flash.info { background-color: #d1ecf1; color: #0c5460; border-left: 4px solid var(--accent); }
+
+        .actions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <h1>💳 PayFlow Guardián</h1>
+    </nav>
+
+    <div class="container">
+        
+        <aside>
+            <div class="card">
+                <div class="card-header">📊 Estado Actual</div>
+                
+                {% if not guardian %}
+                    <p style="color: #666; font-style: italic;">Sistema no inicializado.</p>
+                    <form action="/iniciar" method="POST" style="margin-top: 1rem;">
+                        <div class="form-group">
+                            <label>Presupuesto Mensual Total (PMT):</label>
+                            <input type="number" name="pmt" step="0.01" required placeholder="Ej. 5000">
+                        </div>
+                        <button type="submit">Iniciar Guardián</button>
+                    </form>
+                {% else %}
+                    <div class="stat-group">
+                        <div class="stat-label">Saldo Disponible</div>
+                        <div class="stat-value">${{ "%.2f"|format(guardian.saldo_actual) }}</div>
+                    </div>
+                    <div class="stat-group">
+                        <div class="stat-label">Suscripciones Pendientes</div>
+                        <div class="stat-value">${{ "%.2f"|format(guardian.suscripciones_pendientes) }}</div>
+                    </div>
+                    <div class="stat-group">
+                        <div class="stat-label">Salud Financiera</div>
+                        <div style="margin-top: 5px;">
+                            <span class="badge bg-{{ guardian.estado }}">{{ guardian.estado }}</span>
+                        </div>
+                    </div>
+
+                    {% if guardian.alertas %}
+                        <div style="margin-top: 1.5rem;">
+                            <div class="stat-label" style="margin-bottom: 0.5rem;">⚠️ Alertas Activas</div>
+                            {% for alerta in guardian.alertas %}
+                                <div class="alert-box">{{ alerta }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <form action="/accion/corte_caja" method="POST" style="margin-top: 2rem;">
+                        <button type="submit" class="btn-danger">Ejecutar Corte de Caja</button>
+                    </form>
+                {% endif %}
+            </div>
+        </aside>
+
+        <main>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                <ul class="flashes">
+                {% for category, message in messages %}
+                  <li class="flash {{ category }}">{{ message }}</li>
+                {% endfor %}
+                </ul>
+              {% endif %}
+            {% endwith %}
+
+            <div class="actions-grid">
+                <div class="card">
+                    <div class="card-header">🏦 1. Configurar Meta Ahorro</div>
+                    <form action="/accion/ahorro" method="POST">
+                        <div class="form-group">
+                            <label>Monto a reservar:</label>
+                            <input type="number" step="0.01" name="monto" required>
+                        </div>
+                        <button type="submit">Guardar Ahorro</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">📅 2. Suscripción Futura</div>
+                    <form action="/accion/suscripcion_futura" method="POST">
+                        <div class="form-group">
+                            <label>Costo de Suscripción Fija:</label>
+                            <input type="number" step="0.01" name="monto" required>
+                        </div>
+                        <button type="submit">Añadir Pendiente</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">🛒 3. Gasto Regular</div>
+                    <form action="/accion/gasto_regular" method="POST">
+                        <div class="form-group">
+                            <label>Monto del gasto (Ej. Luz, Agua):</label>
+                            <input type="number" step="0.01" name="monto" required>
+                        </div>
+                        <button type="submit">Descontar Saldo</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">🎮 4. Gasto de Ocio</div>
+                    <form action="/accion/gasto_ocio" method="POST">
+                        <div class="form-group">
+                            <label>Monto del gasto:</label>
+                            <input type="number" step="0.01" name="monto" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Promedio histórico mensual:</label>
+                            <input type="number" step="0.01" name="promedio" required>
+                        </div>
+                        <button type="submit">Evaluar Riesgo Ocio</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 1.5rem;">
+                <div class="card-header">⚡ 5. Ejecutar Cobro (Procesador de Pagos)</div>
+                <form action="/accion/cobro_suscripcion" method="POST" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <div>
+                        <div class="form-group">
+                            <label>Costo a procesar:</label>
+                            <input type="number" step="0.01" name="costo" required>
+                        </div>
+                        <button type="submit" style="margin-top: 0.5rem;">Simular Cobro</button>
+                    </div>
+                    <div>
+                        <label>Parámetros de la Tabla de Decisión:</label>
+                        <div class="checkbox-group">
+                            <input type="checkbox" name="es_vip" id="es_vip">
+                            <label for="es_vip" style="margin:0;">Usuario VIP</label>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" name="cuenta_activa" id="cuenta_activa" checked>
+                            <label for="cuenta_activa" style="margin:0;">Cuenta Activa</label>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" name="tarjeta_vencida" id="tarjeta_vencida">
+                            <label for="tarjeta_vencida" style="margin:0;">Tarjeta Vencida</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+        </main>
+    </div>
+</body>
+</html>
