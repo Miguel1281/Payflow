@@ -8,22 +8,24 @@ def calcular_balance(saldo, monto, comision):
 
 def generar_comprobante(concepto):
     timestamp = int(time.time())
-    concepto_formateado = concepto.replace(" ", "").upper()
-    return f"PAGO-{concepto_formateado}{timestamp}"
+    return f"PAGO-{concepto}{timestamp}"
 
 def procesar_pago(cuenta, concepto, monto_fijo):
-    comision_fija = 15.0 
+    conceptos_validos = ["Renta", "Internet", "Luz"]
+    comision_fija = 15.0
     
-    if concepto.strip().lower() == "internet":
-        comision_fija = 0.0
+    if concepto not in conceptos_validos:
+        return {"estado": "Rechazado", "folio": None}
         
     monto_total_requerido = monto_fijo + comision_fija
     
     if validar_disponibilidad(cuenta["saldo_disponible"], monto_total_requerido):
+        # REPARACIÓN TDD: Cambiamos el 0 por 'comision_fija'
         nuevo_saldo = calcular_balance(cuenta["saldo_disponible"], monto_fijo, comision_fija)
         cuenta["saldo_disponible"] = nuevo_saldo
         
         folio_generado = generar_comprobante(concepto)
         return {"estado": "Éxito", "folio": folio_generado}
     else:
+        # Emitir mensaje de fondos insuficientes
         return {"estado": "Fondos Insuficientes", "folio": None}

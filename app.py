@@ -2,15 +2,12 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from guardian import PayFlowGuardian
 
 app = Flask(__name__)
-# Clave secreta necesaria para mostrar mensajes temporales (alertas/errores)
 app.secret_key = 'payflow_secreto_super_seguro'
 
-# Instancia global para simular la sesión
 guardian_app = None
 
 @app.route('/')
 def index():
-    # Renderiza la vista pasando la instancia actual de PayFlow
     return render_template('index.html', guardian=guardian_app)
 
 @app.route('/iniciar', methods=['POST'])
@@ -22,7 +19,7 @@ def iniciar():
             flash("El PMT debe ser mayor a 0.", "error")
         else:
             guardian_app = PayFlowGuardian(pmt)
-            flash("Sistema inicializado correctamente con éxito.", "success")
+            flash("Sistema inicializado en estado 'Configuración de Fondos'.", "success")
     except ValueError:
         flash("Por favor, ingresa un monto numérico válido.", "error")
     return redirect(url_for('index'))
@@ -38,52 +35,70 @@ def accion(tipo):
         if tipo == 'ahorro':
             monto = float(request.form.get('monto'))
             guardian_app.configurar_ahorro(monto)
-            flash("Meta de ahorro configurada y procesada.", "success")
+            if guardian_app.estado == "Alerta de Déficit":
+                flash("Alerta de Déficit activada: El capital de ahorro no podrá cumplirse.", "error")
+            else:
+                flash("Meta de ahorro configurada y procesada correctamente.", "success")
             
-        elif tipo == 'proyeccion_variables':  # ¡NUEVA FUNCIONALIDAD!
+        elif tipo == 'proyeccion_variables':
             monto = float(request.form.get('monto'))
             guardian_app.establecer_proyeccion_variables(monto)
-            flash("Proyección de gastos variables establecida exitosamente.", "success")
+            flash("Proyección de gastos variables establecida.", "success")
             
         elif tipo == 'suscripcion_futura':
             monto = float(request.form.get('monto'))
-            guardian_app.registrar_suscripcion_futura(monto)
-            flash("Suscripción futura registrada en pendiente.", "success")
-            
-        elif tipo == 'gasto_regular':
+            nombre = request.form.get('nombre')
+            guardian_app.registrar_suscripcion_futura(monto, nombre if nombre else None)
+            flash(f"Suscripción '{nombre or 'Fija'}' registrada como Pendiente.", "success")
+
+        elif tipo == 'pago_servicio':
+            concepto = request.form.get('concepto')
             monto = float(request.form.get('monto'))
-            guardian_app.registrar_gasto(monto)
-            flash("Gasto regular deducido del saldo y acumulado en gastos variables.", "success")
             
+            # Llamamos a nuestro nuevo método (ahora admite cualquier texto)
+            resultado = guardian_app.pagar_servicio(concepto, monto)
+            
+            flash(f"Pago de '{concepto}' procesado. Estado: {resultado['estado']} | Folio: {resultado['folio']}", "success")
         elif tipo == 'gasto_ocio':
             monto = float(request.form.get('monto'))
             promedio = float(request.form.get('promedio'))
-            guardian_app.registrar_gasto_ocio(monto, promedio)
-            flash("Gasto de ocio evaluado y registrado.", "success")
+            confirmar = request.form.get('confirmar_interactivo') == 'on'
+            
+            try:
+                guardian_app.registrar_gasto_ocio(monto, promedio, confirmar)
+                flash("Gasto de ocio aprobado y registrado.", "success")
+            except PermissionError as e:
+                # Se captura la alerta estructural y se solicita interactividad
+                return render_template('index.html', 
+                                       guardian=guardian_app, 
+                                       solicitar_confirmacion_ocio=True,
+                                       ocio_monto=monto,
+                                       ocio_promedio=promedio,
+                                       msg_advertencia=str(e))
             
         elif tipo == 'cobro_suscripcion':
             costo = float(request.form.get('costo'))
+            nombre = request.form.get('nombre_sub')
             es_vip = request.form.get('es_vip') == 'on'
             cuenta_activa = request.form.get('cuenta_activa') == 'on'
             tarjeta_vencida = request.form.get('tarjeta_vencida') == 'on'
             
-            resultado = guardian_app.ejecutar_cobro_suscripcion(costo, es_vip, cuenta_activa, tarjeta_vencida)
-            flash(f"Resultado del cobro: {resultado}", "info")
+            resultado = guardian_app.ejecutar_cobro_suscripcion(
+                costo, es_vip, cuenta_activa, tarjeta_vencida, nombre if nombre else None
+            )
+            flash(f"Procesador de Pagos ejecutado. Resultado: {resultado}", "info")
             
         elif tipo == 'corte_caja':
             reporte = guardian_app.ejecutar_corte_de_caja()
             var = reporte['reporte_variabilidad']
-            # ¡Desglose del nuevo reporte generado por tu lógica de negocio!
-            mensaje = (f"Corte de Caja realizado. Saldo final: ${reporte['saldo_final']:.2f} | "
-                       f"Estado: {reporte['estado_final']} | "
-                       f"Variabilidad ➔ Proyectado: ${var['proyectado']:.2f}, Ejecutado: ${var['ejecutado']:.2f}, Diferencia: ${var['diferencia']:.2f}")
+            mensaje = (f"Corte de Caja ejecutado. Las suscripciones regresaron a 'Pendiente'. "
+                       f"Diferencia de Variabilidad: ${var['diferencia']:.2f}")
             flash(mensaje, "success")
             
-    # Manejo de Reglas de Negocio lanzadas desde PayFlowGuardian
     except ValueError as e:
-        flash(f"Regla de Negocio: {str(e)}", "error")
-    except Exception as e:
-        flash("Entrada inválida o error en el formulario.", "error")
+        flash(f"Regla de Negocio Bloqueada: {str(e)}", "error")
+    except Exception:
+        flash("Error general en el procesamiento de la petición.", "error")
         
     return redirect(url_for('index'))
 
