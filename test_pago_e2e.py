@@ -34,5 +34,4 @@ def test_pago_internet_sin_comision():
     
     assert resultado["estado"] == "Éxito"
     assert cuenta_usuario["saldo_disponible"] == 0.0
-    # CORREGIDO: Ahora el sistema convierte a mayúsculas
     assert resultado["folio"].startswith("PAGO-INTERNET")
