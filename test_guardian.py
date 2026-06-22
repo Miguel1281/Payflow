@@ -101,7 +101,11 @@ def test_cobro_suscripcion_fallido():
 
     assert resultado == "Fallido"
     assert guardian.saldo_actual == 1000.0
-    assert guardian.suscripciones_pendientes == 500.0
+    
+    assert guardian.suscripciones_pendientes == 0.0
+    
+    assert guardian.suscripciones[0]["estado"] == "Suspendida"
+    
     assert len(guardian.alertas) == 1
     assert "Fallo al cobrar" in guardian.alertas[0]
 
