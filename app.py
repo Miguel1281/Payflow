@@ -58,13 +58,14 @@ def accion(tipo):
             resultado = guardian_app.pagar_servicio(concepto, monto)
             
             flash(f"Pago de '{concepto}' procesado. Estado: {resultado['estado']} | Folio: {resultado['folio']}", "success")
+            
         elif tipo == 'gasto_ocio':
             monto = float(request.form.get('monto'))
             promedio = float(request.form.get('promedio'))
             confirmar = request.form.get('confirmar_interactivo') == 'on'
             
             try:
-                guardian_app.registrar_gasto_ocio(monto, promedio, confirmar)
+                guardian_app.registrar_gasto_ocio(monto, confirmar)
                 flash("Gasto de ocio aprobado y registrado.", "success")
             except PermissionError as e:
                 return render_template('index.html', 
@@ -95,7 +96,9 @@ def accion(tipo):
             
     except ValueError as e:
         flash(f"Regla de Negocio Bloqueada: {str(e)}", "error")
-    except Exception:
+    except Exception as e:
+        # Imprimimos el error exacto en la consola para facilitar depuración futura
+        print(f"Error detectado: {e}") 
         flash("Error general en el procesamiento de la petición.", "error")
         
     return redirect(url_for('index'))
