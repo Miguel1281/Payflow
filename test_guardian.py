@@ -239,4 +239,15 @@ def test_alerta_deficit_persiste_tras_gasto():
     assert guardian.estado == "Alerta de Déficit"
     
     guardian.registrar_gasto(50.0) 
-    assert guardian.estado == "Alerta de Déficit" # La alerta sobrevive
+    assert guardian.estado == "Alerta de Déficit" 
+
+def test_corte_de_caja_reinicia_estado_suscripciones():
+    guardian = PayFlowGuardian(pmt=1000.0)
+    guardian.registrar_suscripcion_futura(200.0, "Netflix")
+    
+    guardian.ejecutar_cobro_suscripcion(200.0, False, True, False, "Netflix")
+    assert guardian.suscripciones[0]["estado"] == "Pagada"  
+    
+    guardian.ejecutar_corte_de_caja()
+    
+    assert guardian.suscripciones[0]["estado"] == "Pendiente"
