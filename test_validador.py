@@ -23,3 +23,7 @@ def test_transferencia_debito_excede_monto_sin_token():
 def test_transferencia_debito_excede_monto_con_token():
     resultado = validar_transferencia(6500.0, 14, "Débito", True)
     assert resultado == "APROBADA"
+
+def test_transferencia_tipo_cuenta_desconocido():
+    resultado = validar_transferencia(1000.0, 12, "Desconocida", False)
+    assert resultado == "RECHAZADA_POR_POLÍTICA"
