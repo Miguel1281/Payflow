@@ -61,7 +61,7 @@ def accion(tipo):
             
         elif tipo == 'gasto_ocio':
             monto = float(request.form.get('monto'))
-            promedio = float(request.form.get('promedio'))
+            # ELIMINAMOS la línea que pedía el promedio
             confirmar = request.form.get('confirmar_interactivo') == 'on'
             
             try:
@@ -72,7 +72,7 @@ def accion(tipo):
                                        guardian=guardian_app, 
                                        solicitar_confirmacion_ocio=True,
                                        ocio_monto=monto,
-                                       ocio_promedio=promedio,
+                                       # ELIMINAMOS el ocio_promedio de aquí también
                                        msg_advertencia=str(e))
             
         elif tipo == 'cobro_suscripcion':
